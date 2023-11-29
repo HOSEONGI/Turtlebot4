@@ -88,26 +88,76 @@ class RobotExplorer(Node):
 
         index_front = round((-1.5708 - angle_min) / angle_increment)
 
-        index_start = max(0, index_front - 50)
-        index_end = min(len(msg.ranges) - 1, index_front + 50)
+        index_start = max(0, index_front - 15)
+        index_end = min(len(msg.ranges) - 1, index_front + 15)
         front_ranges = msg.ranges[index_start:index_end+1]
-        front_distance = min([x for x in front_ranges if x != float('inf')])
+        # (기존_최솟값 계산)front_distance = min([x for x in front_ranges if x != float('inf')])
 
-        if front_distance < 0.7:
+        # ///--------주행 추가 front(15도 시야), left(30도 시야), right(30도 시야)--------\\\
+        try:
+            front_distance = statistics.mean([x for x in front_ranges if x != float('inf')])
+        except statistics.StatisticsError:
+            front_distance = 0
+        
+        index_left = round((0 - angle_min) / angle_increment)
+        index_left_start = max(0, index_left - 120)
+        index_left_end = min(len(msg.ranges) - 1, index_left - 60)
+        left_ranges = msg.ranges[index_left_start:index_left_end + 1]
+        try:
+            left_distance = statistics.mean([x for x in left_ranges if x != float('inf')])
+        except statistics.StatisticsError:
+            left_distance = 0
+
+        index_right = round((-3.1416 - angle_min) / angle_increment)
+        index_right_start = max(0, index_right + 60)
+        index_right_end = min(len(msg.ranges) - 1, index_right + 120)
+        right_ranges = msg.ranges[index_right_start:index_right_end + 1]
+        try:
+            right_distance = statistics.mean([x for x in right_ranges if x != float('inf')])
+        except statistics.StatisticsError:
+            right_distance = 0
+
+        self.get_logger().info(f'Front distance: {front_distance}')
+        self.get_logger().info(f'Left distance: {left_distance}')
+        self.get_logger().info(f'Right distance: {right_distance}')
+
+        if (left_distance < 0.3):
             self.twist.linear.x = 0.0
-            self.twist.angular.z = math.pi / 4 * self.turn_direction
-           
-            self.turn_count += 1
-           
-            if self.turn_count >= 100:
-                self.turn_direction *= -1
-                self.turn_count = 0
+            self.turn_direction = -1
+            self.twist.angular.z = math.pi / 6 * self.turn_direction  # 45 Grad in Rad
+            if (front_distance < 0.4):
+                self.twist.angular.z = math.pi / 4 * self.turn_direction
+        elif (right_distance < 0.3):
+            self.twist.linear.x = 0.0
+            self.turn_direction = +1
+            self.twist.angular.z = math.pi / 6 * self.turn_direction
+            if (front_distance < 0.4):
+                self.twist.angular.z = math.pi / 4 * self.turn_direction
+        elif (front_distance < 0.5):
+            self.twist.linear.x = 0.0
+            self.twist.angular.z = math.pi
         else:
             self.twist.linear.x = 0.2
             self.twist.angular.z = 0.0
-
+            
         self.publisher_cmd_vel.publish(self.twist)
+        # \\\--------주행 추가 front(15도 시야), left(30도 시야), right(30도 시야)--------///
+        
+        # (기존 주행 알고리즘)
+        # if front_distance < 0.7:
+        #     self.twist.linear.x = 0.0
+        #     self.twist.angular.z = math.pi / 4 * self.turn_direction
+           
+        #     self.turn_count += 1
+           
+        #     if self.turn_count >= 100:
+        #         self.turn_direction *= -1
+        #         self.turn_count = 0
+        # else:
+        #     self.twist.linear.x = 0.2
+        #     self.twist.angular.z = 0.0
 
+        
         # Update the path
         pose = PoseStamped()
         pose.header.stamp = self.get_clock().now().to_msg()
